@@ -1,0 +1,46 @@
+h1. smd_where_used
+
+Really simple admin-side plugin to help find what you need to edit/delete. If you have a tonne of forms or pages and want to tidy stuff up it can be a bit of a pain to find what's actually in use.
+
+So use this plugin to search your sections, pages, forms or articles for references to plugins, or other pages/forms/stylesheets or even just plain text in articles / stylesheets.
+
+h2. Installation / Uninstallation
+
+Download the plugin from either "textpattern.org":http://textpattern.org/plugins/984/smd_where_used, or the "software page":http://stefdawson.com/sw, paste the code into the Textpattern _Admin->Plugins_ panel, install and enable the plugin. Visit the "forum thread":http://forum.textpattern.com/viewtopic.php?id=27493 for more info and to report the success (or otherwise) of this plugin.
+
+Uninstall by simply deleting the plugin from the _Admin->Plugins_ panel.
+
+h2. Usage
+
+Visit the Extensions tab and Click ‘Where used' to access the search form. Type some stuff to find, select where you want to look and hit ‘Search' or press Enter. Your requested locations will be searched for that term and the results tabulated, with hyperlinks to the offending items so you can quickly edit them.
+
+You can decide whether to search for the term (“Include”) or to search for stuff NOT containing that term (“Exclude”). You may also choose whether your search term matches/does not match a whole word or is case sensitive.
+
+This is what the plugin looks at when you select a particular checkbox from the “Look at” row:
+
+* ‘Sections' searches every Section for pages or stylesheets with the matching name
+* ‘Pages' searches every Page for forms / plugins / text with the matching name
+* ‘Forms' searches every Form for plugins / other forms / text with the matching name
+* ‘Stylesheets' searches every Stylesheet for text with the matching name
+* ‘Articles' searches (by default) every Article section, body, excerpt, override_form, title and keyword for mention of the text you specify. Click the _Article search fields_ button to see a list of database columns that you may search. Check the ones you wish to consider and click _Save_
+
+If, however, you leave the ‘Find' box empty and click ‘Search' the plugin will search for orphans. Orphans are defined as follows:
+
+* Any Page that is not assigned to a Section
+* Any Stylesheet that is not assigned to a Section
+* Any Section that has no Articles in it (excluding ‘default' which cannot have an article anyway)
+* Any Plugin that is not referenced from an Article (body/excerpt) or another Form or Page
+* Any Form that has no reference to it in any Article (body/excerpt/override_form) or another Form or Page
+
+Notes:
+
+* Orphaned articles don't make sense so they are omitted. The checkbox is ignored
+* Essential sections / pages / forms that cannot be deleted are not listed
+* Plugins are always displayed because there's no check box for it. The reason is that smd_where_used does not allow searching within a plugin for a reference to a word, but it does check other places for references _to_ plugins
+* The Plugin list can be toggled. It begins by showing both admin and public (A+P) plugins. If you wish to see public-only (P) plugins, click ‘Search' again to toggle the list
+* Just because an item is listed as orphaned does _not necessarily mean it is not used_! For example, rvm_maintenance checks for the existence of an @error_503@ Page. Since it is never assigned to a Section it will be listed as orphaned. If you have a dedicated stylesheet for maintenance mode that, too, will be shown as orphaned. In short, be careful and make a backup :-)
+* Plugins such as pap_contact_cleaner and rvm_maintenance are listed as orphans even though they are used by other plugins / usually disabled. If you are unsure about a plugin, check it by typing a partial tag name into the search box
+
+h2. Author
+
+"Stef Dawson":https://stefdawson.com/sw
