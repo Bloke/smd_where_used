@@ -509,12 +509,12 @@ EOJS;
             $placeTable['forms'][8] = $skin ? "tf.skin='".doSlash($skin)."'" : '';
             $placeTable['pages'][8] = $skin ? "tp.skin='".doSlash($skin)."'" : '';
             $placeTable['stylesheets'][1] = 'name';
-            $placeTable['stylesheets'][8] = $skin ? "ts.skin='".doSlash($skin)."'" : '';
+            $placeTable['stylesheets'][8] = $skin ? "tc.skin='".doSlash($skin)."'" : '';
             $placeTable['forms'][0] = "SELECT tf.name, tf.skin FROM " .safe_pfx('txp_form'). " AS tf WHERE tf.name NOT IN (" .doQuote(implode("','",$essentials['forms'])). ") ".($placeTable['forms'][8] ? ' AND '.$placeTable['forms'][8] : '')." ORDER BY tf.name"; // Would be nice to exclude forms that reference forms here instead of iterating through them later.
             $placeTable['pages'][0] = "SELECT tp.name, tp.skin FROM " .safe_pfx('txp_section'). " AS ts RIGHT JOIN " .safe_pfx('txp_page'). " AS tp ON ts.page = tp.name WHERE ts.page IS NULL AND tp.name NOT IN (" .doQuote(implode("','",$essentials['pages'])). ") ".($placeTable['pages'][8] ? ' AND '.$placeTable['pages'][8] : '')." ORDER BY tp.name";
             $placeTable['plugins'][0] = "SELECT tg.name, tg.code FROM " .safe_pfx('txp_plugin'). " AS tg WHERE type < " .($plugtype+1). " AND tg.name != 'smd_where_used' ORDER BY tg.name";
             $placeTable['sections'][0] = "SELECT ts.name FROM " .safe_pfx('txp_section'). " AS ts LEFT JOIN " .safe_pfx('textpattern'). " AS txp ON ts.name = txp.section WHERE ID IS NULL AND ts.name NOT IN (" .doQuote(implode("','",$essentials['sections'])). ") ORDER BY ts.name";
-            $placeTable['stylesheets'][0] = "SELECT tc.name, tc.skin FROM " .safe_pfx('txp_section'). " AS ts RIGHT JOIN " .safe_pfx('txp_css'). " AS tc ON ts.css = tc.name WHERE ts.page IS NULL ".($placeTable['stylesheets'][8] ? ' AND '.$placeTable['stylesheets'][8] : '')." ORDER BY tc.name";
+            $placeTable['stylesheets'][0] = "SELECT tc.name, tc.skin FROM " .safe_pfx('txp_section'). " AS ts RIGHT JOIN " .safe_pfx('txp_css'). " AS tc ON ts.css = tc.name WHERE ts.css IS NULL ".($placeTable['stylesheets'][8] ? ' AND '.$placeTable['stylesheets'][8] : '')." ORDER BY tc.name";
 
             // For "awkward" queries that can't be done in one shot, there are three things required per $place:
             //  1: txp table name
