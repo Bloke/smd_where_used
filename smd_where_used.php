@@ -17,9 +17,9 @@ $plugin['name'] = 'smd_where_used';
 // 1 = Plugin help is in raw HTML.  Not recommended.
 # $plugin['allow_html_help'] = 1;
 
-$plugin['version'] = '0.30';
+$plugin['version'] = '0.40';
 $plugin['author'] = 'Stef Dawson';
-$plugin['author_uri'] = 'http://stefdawson.com/';
+$plugin['author_uri'] = 'https://stefdawson.com/';
 $plugin['description'] = 'Find which forms/pages/articles/plugins/text have been used where in your design';
 
 // Plugin load order:
@@ -54,347 +54,576 @@ $plugin['flags'] = '0';
 // #@language ISO-LANGUAGE-CODE
 // abc_string_name => Localized String
 
-/** Uncomment me, if you need a textpack
 $plugin['textpack'] = <<< EOT
-#@admin
-#@language en-gb
-abc_sample_string => Sample String
-abc_one_more => One more
-#@language de-de
-abc_sample_string => Beispieltext
-abc_one_more => Noch einer
+#@language en, en-gb, en-us
+#@admin-side
+smd_wu => Where used
+#@smd_wu
+smd_wu_admin_plugins => [ A+P ]
+smd_wu_public_plugins => [ P ]
+smd_wu_exclusion => Exclude
+smd_wu_inclusion => Include
+smd_wu_filter => Filter:
+smd_wu_match_case => Match case
+smd_wu_no_orphans_found => No orphans found.
+smd_wu_orphan_results => Possible orphans
+smd_wu_prefs_link => Article search fields
+smd_wu_search_lbl => Find:
+smd_wu_search_where_lbl => Look at:
+smd_wu_stylesheets => Stylesheets
+smd_wu_whole_word => Whole words
 EOT;
-**/
-// End of textpack
 
 if (!defined('txpinterface'))
         @include_once('zem_tpl.php');
 
 # --- BEGIN PLUGIN CODE ---
-// -------------------------------------------------------------
-if (@txpinterface == 'admin') {
-	add_privs('smd_wu','1,2');
+/**
+ * smd_where_used
+ *
+ * A Textpattern CMS plugin for finding which forms/pages/articles/plugins/text
+ * have been used where in your site design.
+ *
+ * @author Stef Dawson
+ * @link   https://stefdawson.com/
+ */
 
-	// Extensions tab
-	register_tab('extensions', 'smd_wu', smd_wu_gTxt('smd_wu'));
-	register_callback('smd_wu', 'smd_wu');
+if (txpinterface === 'admin') {
+    new smd_wu();
 }
 
-// -------------------------------------------------------------
-function smd_wu($event, $step) {
-	if(!$step or !in_array($step, array(
-			'smd_wu_search',
-			'smd_wu_prefsave',
-		))) {
-		smd_wu_showform('');
-	} else $step();
-}
+/**
+ * Admin-side user interface.
+ */
+class smd_wu
+{
+    /**
+     * The plugin's event as registered in Txp.
+     *
+     * @var string
+     */
+    protected $event = 'smd_wu';
 
-// -------------------------------------------------------------
-function smd_wu_showform($message, $term='', $sel=array(), $incl=0, $whole=0, $mode=0, $plugtype=0, $case=0) {
-	pagetop(smd_wu_gTxt('smd_wu'),$message);
-	$btnSearch = fInput('submit', 'smd_wu_search', gTxt('search'), 'smallerbox').sInput('smd_wu_search').hInput('plugtype', (($plugtype==1) ? 0 : 1));
-	$btnStyle = ' style="border:0;height:25px"';
-	$place = array('sections','pages','forms','stylesheets','articles');
-	$sel = empty($sel) ? unserialize(get_pref('smd_wu_look_in')) : $sel;
-	$sel = empty($sel) ? $place : $sel;
+    /**
+     * List of places offered to look for content matches
+     *
+     * @var array
+     */
+    protected $places = array('sections', 'pages', 'forms', 'stylesheets', 'articles');
 
-	echo '<form method="post" name="smd_wu_form">';
-	echo startTable('list');
-	echo tr(fLabelCell(smd_wu_gTxt('search_lbl')) . tdcs(fInput('text', 'search_for', stripslashes($term), '', '', '', 30, '', 'smd_search_for'), 5) . tda($btnSearch, $btnStyle));
-	echo tr(fLabelCell(smd_wu_gTxt('filter')).tdcs(radio('meth',0,(($incl==0)?1:0)).smd_wu_gTxt('inclusion')." " . radio('meth',1,(($incl==1)?1:0)).smd_wu_gTxt('exclusion'). " | " . smd_wu_gTxt('whole_word').checkbox('whole', 1, (($whole==1)?1:0)). " | " . smd_wu_gTxt('match_case').checkbox('case', 1, (($case==1)?1:0)), 5));
-	$out = '';
-	foreach ($place as $here) {
-		$out .= fLabelCell(ucfirst(gTxt($here)) . checkbox('places[]', $here, in_array($here,$sel)));
-	}
-	echo tr(fLabelCell(smd_wu_gTxt('search_where_lbl')) . $out);
-	echo endTable();
-	echo '</form>';
+    /**
+     * List of default article fieldsto search
+     *
+     * @var string (comma-separated list)
+     */
+    protected $fields = 'Body, Excerpt, override_form, Section, Title, Keywords';
 
-	// Render the prefs checkboxes
-	$cols = getThings('describe `'.PFX.'textpattern`');
-	$flds = do_list(get_pref('smd_wu_article_fields'));
-	$flds = empty($flds[0]) ? do_list('Body,Excerpt,override_form,Section,Title,Keywords') : $flds;
+    /**
+     * Constructor to set up callbacks and environment.
+     */
+    public function __construct()
+    {
+        add_privs($this->event, '1,2');
 
-	echo '<div id="smd_wu_prefwrap"><a id="smd_wu_preftog" href="#">'.smd_wu_gTxt('prefs_link').'</a>';
-	echo '<form method="post" id="smd_wu_prefs" style="display:none;">';
-	foreach ($cols as $col) {
-		echo br.checkbox('smd_wu_article_fields[]', $col, (in_array($col, $flds) ? 1 : 0)).sp.$col;
-	}
-	echo fInput('submit', 'smd_wu_prefsave', gTxt('save'), 'smallerbox', '', '', '', '', 'smd_wu_prefsave');
-	echo '</form></div>';
-	echo <<<EOJS
+        register_tab('extensions', $this->event, gTxt($this->event));
+        register_callback(array($this, $this->event), $this->event);
+    }
+
+    /**
+     * Plugin jumpoff point.
+     *
+     * @param  string $evt Textpattern event
+     * @param  string $stp Textpattern step (action)
+     */
+    public function smd_wu($evt, $stp)
+    {
+        $available_steps = array(
+            'ui'       => false,
+            'search'   => true,
+            'prefsave' => true,
+        );
+
+        if (!$stp or !bouncer($stp, $available_steps)) {
+            $stp = 'ui';
+        }
+
+        $this->$stp();
+    }
+
+    /**
+     * Draw the user interface search options and input boxes.
+     *
+     * @param  string  $message  Feedback message to display
+     * @param  string  $what     String term to search for
+     * @param  array   $where    Options that denote where to search for the term
+     * @return string            HTML
+     */
+    public function ui($message = '', $what= '', $where = array())
+    {
+        $thisSkin = Txp::get('Textpattern\Skin\Page');
+        $instance = Txp::get('Textpattern\Skin\Skin');
+
+        $sel = empty($where['places']) ? json_decode(get_pref('smd_wu_look_in')) : $where['places'];
+        $sel = empty($sel) ? $this->places : $sel;
+
+        $incl = empty($where['include']) ? 0 : $where['include'];
+        $case = empty($where['case']) ? 0 : $where['case'];
+        $mode = empty($where['mode']) ? 0 : $where['mode'];
+        $skin = !isset($where['skin']) ? $instance->getEditing() : $where['skin'];
+        $whole = empty($where['whole']) ? 0 : $where['whole'];
+        $plugtype = empty($where['plugtype']) ? 5 : $where['plugtype'];
+
+        pagetop(gTxt($this->event), $message);
+
+        // Todo: introduce 3, 4, 5 plugin type support.
+        $btnSearch = fInput('submit', 'smd_wu_search', gTxt('search'), 'smallerbox')
+            .eInput($this->event)
+            .sInput('search')
+            .tInput()
+            .hInput('plugtype', (($plugtype == 1) ? 0 : 1));
+
+        // @todo: Fix styles.
+        $btnStyle = ' style="border:0;height:25px"';
+
+        $skins = $instance->setName($skin)->getInstalled();
+
+        // $essential_forms = $thisSkin->getEssential('name');
+
+        $out = array();
+
+        // TODO: use latest grid for layout.
+        $out[] = '<form method="post" name="smd_wu_form">';
+        $out[] = startTable('list');
+        $out[] = tr(
+            fLabelCell(gTxt('smd_wu_search_lbl'))
+            . tdcs(
+                fInput('text', 'search_for', stripslashes($what), '', '', '', 30, '', 'smd_search_for')
+                , 5)
+            . tda($btnSearch, $btnStyle));
+
+        // @todo link labels to checkbox/radio.
+        $out[] = tr(
+            fLabelCell(gTxt('smd_wu_filter'))
+                . tdcs(
+                    radio('meth', 0, (($incl == 0) ? 1 : 0))
+                    .n. gTxt('smd_wu_inclusion')
+                    .n.
+                    radio('meth', 1, (($incl == 1) ? 1 : 0))
+                    .n. gTxt('smd_wu_exclusion')
+                    . " | "
+                    . checkbox('whole', 1, (($whole == 1) ? 1 : 0))
+                    .n.gTxt('smd_wu_whole_word')
+                    . " | "
+                    . checkbox('case', 1, (($case == 1) ? 1 : 0))
+                    .n.gTxt('smd_wu_match_case')
+                    , 5));
+
+        $out[] = inputLabel(
+                'skin',
+                selectInput('skin', $skins, $skin, true, 0, 'skin'),
+                'skin'
+            );
+
+        $lookAt = '';
+
+        foreach ($this->places as $here) {
+            $lookAt .= fLabelCell(checkbox('places[]', $here, in_array($here, $sel)) . n . ucfirst(gTxt($here)));
+        }
+
+        $out[] = tr(fLabelCell(gTxt('smd_wu_search_where_lbl')) . $lookAt);
+        $out[] = endTable();
+        $out[] = '</form>';
+
+        // Render the prefs checkboxes.
+        $cols = getThings('describe `'.PFX.'textpattern`');
+        $flds = do_list(get_pref('smd_wu_article_fields'));
+        $flds = empty($flds[0]) ? do_list($this->fields) : $flds;
+
+        $out[] = '<div id="smd_wu_prefwrap"><a id="smd_wu_preftog" href="#">'.gTxt('smd_wu_prefs_link').'</a>';
+        $out[] = '<form method="post" id="smd_wu_prefs" style="display:none;"><ul class="smd_grid">';
+
+        foreach ($cols as $col) {
+            $out[] = tag(checkbox('smd_wu_article_fields[]', $col, (in_array($col, $flds) ? 1 : 0)).sp.$col, 'li');
+        }
+
+        $out[] = '</ul>'.fInput('submit', 'smd_wu_prefsave', gTxt('save'), 'smallerbox', '', '', '', '', 'smd_wu_prefsave');
+        $out[] = '</form></div>';
+        $out[] = <<<EOJS
 <script type="text/javascript">
 jQuery(function() {
-	jQuery("#smd_search_for").focus();
-	jQuery("#smd_wu_prefs").hide();
-	jQuery("#smd_wu_preftog").click(function() {
-		jQuery("#smd_wu_prefs").toggle('fast');
-		return false;
-	});
-	jQuery("#smd_wu_prefsave").click(function() {
-		var out = [];
-		jQuery("#smd_wu_prefs input:checked").each(function() {
-			out.push(jQuery(this).val());
-		});
+    jQuery("#smd_search_for").focus();
+    jQuery("#smd_wu_prefs").hide();
+    jQuery("#smd_wu_preftog").click(function() {
+        jQuery("#smd_wu_prefs").toggle('fast');
+        return false;
+    });
+    jQuery("#smd_wu_prefsave").click(function() {
+        var out = [];
+        jQuery("#smd_wu_prefs input:checked").each(function() {
+            out.push(jQuery(this).val());
+        });
 
-		sendAsyncEvent(
-			{
-				event: textpattern.event,
-				step: 'smd_wu_prefsave',
-				smd_wu_article_fields: out.join(',')
-			}
-		);
-		jQuery("#smd_wu_prefs").toggle('fast');
-		return false;
-	});
+        sendAsyncEvent({
+                event: textpattern.event,
+                step: 'prefsave',
+                smd_wu_article_fields: out.join(',')
+        });
+        jQuery("#smd_wu_prefs").toggle('fast');
+        return false;
+    });
 });
 </script>
 <style type="text/css">
-#smd_wu_prefwrap {
-	width:140px;
-	margin:10px auto 0;
+.smd_grid {
+    display: flex;
+    flex-wrap: wrap;
+    list-style-type: none;
+}
+.smd_grid li {
+    padding: 0 1em;
+    width: 40%;
+}
+@media (min-width:48em) {
+    .smd_grid li {
+        width: 21%;
+    }
 }
 </style>
 EOJS;
-}
 
-// -------------------------------------------------------------
-function smd_wu_prefsave() {
-	$cols = getThings('describe `'.PFX.'textpattern`');
-	$fields = do_list(gps('smd_wu_article_fields'));
-	$oflds = array();
-	foreach($fields as $fld) {
-		if (in_array($fld, $cols)) {
-			$oflds[] = $fld;
-		}
-	}
-	set_pref('smd_wu_article_fields', join(',',$oflds), 'smd_wu', PREF_HIDDEN, 'text_input');
-	send_xml_response();
-}
+        echo join(n, $out);
+    }
 
-// -------------------------------------------------------------
-function smd_wu_search() {
-	extract(doSlash(gpsa(array('search_for'))));
-	$whole = gps('whole');
-	$case = gps('case'); // 0 = case insensitive, 1 = case sensitive
-	$caseSense = ($case==1) ? ' BINARY ' : '';
-	$meth = gps('meth'); // 0 = include, 1 = exclude
-	$plugtype = gps('plugtype'); // 0 = public, 1 = 0+admin, 2 = 1+library
-	$plugtype = (is_numeric($plugtype) && $plugtype < 3) ? $plugtype : 0;
-	$joinme = ($meth == 0) ? " OR " : " AND ";
-	$places = gps('places');
-	$places = is_array($places) ? $places : array();
-	set_pref('smd_wu_look_in', serialize($places), 'smd_wu', PREF_HIDDEN, 'text_input');
-	$mode = ($search_for) ? 0 : 1;
-	smd_wu_showform('', $search_for, $places, $meth, $whole, $mode, $plugtype, $case);
+    /**
+     * [smd_wu_prefsave description]
+     *
+     */
+    public function prefsave()
+    {
+        $cols = getThings('describe `'.PFX.'textpattern`');
+        $fields = do_list(gps('smd_wu_article_fields'));
+        $oflds = array();
 
-	$artflds = get_pref('smd_wu_article_fields');
-	$artflds = empty($artflds) ? 'Body,Excerpt,override_form,Section,Title,Keywords' : $artflds;
+        foreach ($fields as $fld) {
+            if (in_array($fld, $cols)) {
+                $oflds[] = $fld;
+            }
+        }
 
-	// Entries in the placeTable array are:
-	//  0: Table to search
-	//  1: Column to search
-	//  2: Column to return
-	//  3: Heading to display if results found
-	//  4: Event of destination URL
-	//  5: Step of destination URL
-	//  6: Additional URL var
-	//  7: Additional URL var replacement (used in strtr)
-	$placeTable = array(
-		'pages' => array('txp_page', 'user_html', 'name', gTxt('pages'), 'page', '', 'name', '{name}', ''),
-		'forms' => array('txp_form', 'form', 'name', gTxt('forms'), 'form', 'form_edit', 'name', '{name}', ''),
-		'articles' => array('textpattern', $artflds, 'ID,title', gTxt('articles'), 'article', 'edit', 'ID', '{ID}', ''),
-		'sections' => array('txp_section', 'page,css', 'name', gTxt('sections'), 'section', '', '#', 'section-{name}', ''),
-		'stylesheets' => array('txp_css', 'css', 'name', smd_wu_gTxt('stylesheets'), 'css', '', 'name', '{name}', ''),
-	);
+        set_pref('smd_wu_article_fields', join(',', $oflds), 'smd_wu', PREF_HIDDEN, 'text_input');
+        send_xml_response();
+    }
 
-	$rs = array();
-	echo n.'<hr width="50%" />';
-	echo startTable('list');
-	$colHead = array();
-	$colBody = array();
+    /**
+     * Perform the search operation
+     *
+     * @return string HTML
+     */
+    public function search()
+    {
+        extract(doSlash(gpsa(array('search_for'))));
 
-	if ($search_for) {
-		echo tr(tdcs(tag(gTxt('search_results'), 'h2'), 5));
-		foreach ($places as $place) {
-			$crow = $placeTable[$place];
-			$where = array();
-			$witems = do_list($crow[1]);
-			$list = do_list($crow[2]);
+        $whole = gps('whole');
+        $case = gps('case'); // 0 = case insensitive, 1 = case sensitive.
+        $caseSense = ($case == 1) ? ' BINARY ' : '';
+        $meth = gps('meth'); // 0 = include, 1 = exclude
+        $plugtype = gps('plugtype'); // 0 = public, 1 = 0+admin, 2 = 1+library.
+        $plugtype = (is_numeric($plugtype) && $plugtype < 3) ? $plugtype : 0;
+        $joinme = ($meth == 0) ? " OR " : " AND ";
+        $places = gps('places');
+        $places = is_array($places) ? $places : array();
+        set_pref('smd_wu_look_in', json_encode($places), 'smd_wu', PREF_HIDDEN, 'text_input');
+        $mode = ($search_for) ? 0 : 1;
+        $skin = gps('skin');
+        $skin = ($skin) ? Txp::get('Textpattern\Skin\Skin')->setName($skin) : '';
 
-			foreach ($witems as $item) {
-				$where[] = $caseSense . $item . (($meth==1) ? ' NOT' : '') . (($whole==1) ? ' REGEXP \'[[:<:]]'.$search_for.'[[:>:]]\'' : " LIKE '%$search_for%'");
-			}
-			$rs = safe_rows($crow[2], $crow[0], '('.join($joinme, $where).') ORDER BY '.$list[0]);
-			$colHead[] = td(strong($crow[3]));
-			if ($rs) {
-				$out = '<ul>';
-				foreach ($rs as $row) {
-					$hlink = '';
-					$vars = '';
-					foreach ($list as $col) {
-						$from = '{'.$col.'}';
-						if (strpos($crow[7], $from) !== false) {
-							if ($crow[6] == "#") {
-								$vars = join_qs(array("event" => $crow[4], "step" => $crow[5])).$crow[6].strtr($crow[7], array($from => $row[$col]));
-							} else {
-								$vars = join_qs(array("event" => $crow[4], "step" => $crow[5], $crow[6] => strtr($crow[7], array($from => $row[$col]))));
-							}
-						}
-						$hlink .= $row[$col]." ";
-					}
-					$out .= ($hlink) ? '<li>' . (($vars) ? '<a href="index.php'.$vars.'">'.$hlink.'</a> ' : $hlink) . '</li>': '';
-				}
-				$out .= '</ul>';
-				$colBody[] = td($out);
-			} else {
-				$colBody[] = td(gTxt('no_results_found'));
-			}
-		}
-		echo tr(join(" ", $colHead));
-		echo tr(join(" ", $colBody));
-	} else {
-		// No search criteria, so show orphans
-		echo tr(tdcs(tag(smd_wu_gTxt('orphan_results'), 'h2'), 5));
+        $payload = array(
+            'case' => $case,
+            'mode' => $mode,
+            'skin' => $skin,
+            'whole' => $whole,
+            'places' => $places,
+            'include' => $meth,
+            'plugtype' => $plugtype,
+        );
 
-		// Reprogram the places/placeTable
-		$artkey = array_search('articles', $places);
-		if ($artkey !== false) {
-			unset($places[$artkey]);
-		}
+        // @todo assign to $out[] instead of direct echo.
+        echo $this->ui('', $search_for, $payload);
 
-		// pages/forms/sections to ignore because they are static and cannot be deleted
-		$essentials = array(
-			'sections' => array('default'),
-			'pages' => array('error_default'),
-			'forms' => array('comments','comments_display','comment_form','default','Links','files'), // copied from txp_forms
-		);
+        $artflds = get_pref('smd_wu_article_fields');
+        $artflds = empty($artflds) ? $this->fields : $artflds;
 
-		$places[] = 'plugins';
+        // Entries in the placeTable array are:
+        //  0: Table to search
+        //  1: Column to search
+        //  2: Column(s) to return
+        //  3: Heading to display if results found
+        //  4: Event of destination URL
+        //  5: Step of destination URL
+        //  6: Additional URL vars
+        //  7: Additional URL vars replacement (used in strtr)
+        //  8: Additional criteria required in query
+        $placeTable = array(
+            'pages' => array(
+                'txp_page',
+                'user_html',
+                'name, skin',
+                gTxt('pages'),
+                'page',
+                '',
+                'name, skin',
+                '{name},{skin}',
+                ($skin ? "skin='".doSlash($skin)."'" : '')
+            ),
+            'forms' => array(
+                'txp_form',
+                'form',
+                'name, skin',
+                gTxt('forms'),
+                'form',
+                'form_edit',
+                'name, skin',
+                '{name}, {skin}',
+                ($skin ? "skin='".doSlash($skin)."'" : '')
+            ),
+            'articles' => array(
+                'textpattern',
+                $artflds,
+                'ID,title',
+                gTxt('articles'),
+                'article',
+                'edit',
+                'ID',
+                '{ID}',
+                ''
+            ),
+            'sections' => array(
+                'txp_section',
+                'page,css',
+                'name',
+                gTxt('sections'),
+                'section',
+                'section_edit',
+                'name',
+                '{name}',
+                ''
+            ),
+            'stylesheets' => array(
+                'txp_css',
+                'css',
+                'name, skin',
+                gTxt('smd_wu_stylesheets'),
+                'css',
+                '',
+                'name, skin',
+                '{name}, {skin}',
+                ($skin ? "skin='".doSlash($skin)."'" : '')
+            ),
+        );
 
-		$placeTable['plugins'] = array('txp_plugin', 'name', 'name', gTxt('plugins'), 'plugin', '', '#', '{name}');
-		$placeTable['stylesheets'] = array('txp_css', 'name', 'name', smd_wu_gTxt('stylesheets'), 'css', '', 'name', '{name}');
+        $rs = array();
 
-		$placeTable['forms'][0] = "SELECT tf.name FROM " .safe_pfx('txp_form'). " AS tf WHERE tf.name NOT IN (" .doQuote(implode("','",$essentials['forms'])). ") ORDER BY tf.name"; // Would be nice to exclude forms that reference forms here instead of iterating through them later
-		$placeTable['pages'][0] = "SELECT tp.name FROM " .safe_pfx('txp_section'). " AS ts RIGHT JOIN " .safe_pfx('txp_page'). " AS tp ON ts.page = tp.name WHERE ts.page IS NULL AND tp.name NOT IN (" .doQuote(implode("','",$essentials['pages'])). ") ORDER BY tp.name";
-		$placeTable['plugins'][0] = "SELECT tg.name, tg.code FROM " .safe_pfx('txp_plugin'). " AS tg WHERE type < " .($plugtype+1). " AND tg.name != 'smd_where_used' ORDER BY tg.name";
-		$placeTable['sections'][0] = "SELECT ts.name FROM " .safe_pfx('txp_section'). " AS ts LEFT JOIN " .safe_pfx('textpattern'). " AS txp ON ts.name = txp.section WHERE ID IS NULL AND ts.name NOT IN (" .doQuote(implode("','",$essentials['sections'])). ") ORDER BY ts.name";
-		$placeTable['stylesheets'][0] = "SELECT tc.name FROM " .safe_pfx('txp_section'). " AS ts RIGHT JOIN " .safe_pfx('txp_css'). " AS tc ON ts.css = tc.name WHERE ts.page IS NULL ORDER BY tc.name";
+        echo n.'<hr width="50%" />';
+        echo startTable('list');
 
-		// For "awkward" queries that can't be done in one shot, there are three things required per $place:
-		//  1: txp table name
-		//  2: list of columns to compare
-		//  3: method of comparison per column (0 = "direct match", 1 = "like")
-		$cTable = array(
-			'plugins' => array(
-				'txp_form' => array('form' => 1),
-				'txp_page' => array('user_html' => 1),
-				'textpattern' => array('Body' => 1, 'Excerpt' => 1),
-			),
-			'forms' => array(
-				'txp_form' => array('form' => 1),
-				'txp_page' => array('user_html' => 1),
-				'textpattern' => array('Body' => 1, 'Excerpt' => 1, 'override_form' => 0),
-			),
-		);
+        $colHead = array();
+        $colBody = array();
 
-		// Work on a column at a time
-		foreach ($places as $place) {
-			$crow = $placeTable[$place];
-			$colRefs = do_list($crow[2]);
-			$colHead[] = td(strong($crow[3] . (($place == 'plugins') ? (($plugtype==0) ? smd_wu_gTxt('public_plugins') : smd_wu_gTxt('admin_plugins') ) : '') ));
-			$rs = startRows($crow[0]);
-			if ($rs) {
-				$out = '<ul>';
-				while ($row = nextRow($rs)) {
-					// Count the no of records matching this name in each table.
-					// Any time this goes above zero, the item is used and it can be ignored
-					$fnaliases = array();
-					if (array_key_exists($place, $cTable)) {
-						// Plugin functions are not necessarily the name of the plugin itself.
-						// Find all function definitions and build a list of aliases
-						if ($place == 'plugins') {
-							$re = '/function\s+([A-Za-z0-9_]+)\s*\(/';
-							$num = preg_match_all($re, $row['code'], $fnaliases);
-						}
+        if ($search_for) {
+            echo tr(tdcs(tag(gTxt('search_results'), 'h2'), 5));
 
-						$recs = 0;
-						foreach ($cTable[$place] as $tbl => $colInfo) {
-							if ($recs == 0) {
-								$where = array();
-								foreach ($colInfo as $colName => $qryType) {
-									$where[] = $colName . (($qryType==0) ? " = '" .$row[$colRefs[0]]. "'" : " LIKE '%" .$row[$colRefs[0]]. "%'");
-									if (count($fnaliases) > 1) {
-										foreach ($fnaliases[1] as $fnalias) {
-											$where[] = $colName . (($qryType==0) ? " = '" .$fnalias. "'" : " LIKE '%" .$fnalias. "%'");
-										}
-									}
-								}
-								$where = join(" OR ", $where);
-								$recs += safe_count($tbl, $where);
-							}
-						}
+            foreach ($places as $place) {
+                $crow = $placeTable[$place];
+                $where = $extra = array();
+                $witems = do_list($crow[1]);
+                $display = do_list($crow[2]);
 
-						// If the item has not been found, flag it
-						if ($recs == 0) {
-							$colNames = $colRefs;
-						} else {
-							$colNames = array();
-						}
-					} else {
-						$colNames = $colRefs;
-					}
+                foreach ($witems as $item) {
+                    $where[] = $caseSense . $item . (($meth==1) ? ' NOT' : '') . (($whole==1) ? ' REGEXP \'[[:<:]]'.$search_for.'[[:>:]]\'' : " LIKE '%$search_for%'");
+                }
 
-					// Make up the string to display, and hyperlink it if directed
-					$hlink = '';
-					$vars = '';
-					foreach ($colNames as $col) {
-						$from = '{'.$col.'}';
-						if (strpos($crow[7], $from) !== false) {
-							if ($crow[6] == "#") {
-								$vars = join_qs(array("event" => $crow[4], "step" => $crow[5])).$crow[6].strtr($crow[7], array($from => $row[$col]));
-							} else {
-								$vars = join_qs(array("event" => $crow[4], "step" => $crow[5], $crow[6] => strtr($crow[7], array($from => $row[$col]))));
-							}
-						}
-						$hlink .= $row[$col]." ";
-					}
-					$out .= ($hlink) ? '<li>' . (($vars) ? '<a href="index.php'.$vars.'">'.$hlink.'</a> ' : $hlink) . '</li>': '';
-				}
-				$out .= '</ul>';
-				$colBody[] = td($out);
-			} else {
-				$colBody[] = td(smd_wu_gTxt('no_orphans_found'));
-			}
-		}
-		echo tr(join(" ", $colHead));
-		echo tr(join(" ", $colBody));
-	}
-	echo endTable();
-}
+                if (!empty($crow[8])) {
+                    $extra[] = ' AND '.$crow[8];
+                }
 
-// -------------------------------------------------------------
-// Plugin-specific replacement strings - localise as required
-// -------------------------------------------------------------
-function smd_wu_gTxt($what, $atts = array()) {
-	$lang = array(
-		'admin_plugins' => ' [ A+P ]',
-		'public_plugins' => ' [ P ]',
-		'exclusion' => 'Exclude',
-		'inclusion' => 'Include',
-		'filter' => 'Filter:',
-		'match_case' => 'Match case',
-		'no_orphans_found' => 'No orphans found.',
-		'orphan_results' => 'Possible orphans',
-		'prefs_link' => 'Article search fields',
-		'search_lbl' => 'Find:',
-		'search_where_lbl' => 'Look at:',
-		'stylesheets' => 'Stylesheets',
-		'smd_wu' => 'Where used',
-		'whole_word' => 'Whole words',
-	);
-	return strtr($lang[$what], $atts);
+                $extraQuery = join(' ',$extra);
+
+                $rs = safe_rows($crow[2], $crow[0], '('.join($joinme, $where).')'.$extraQuery.' ORDER BY '.$display[0]);
+                $colHead[] = td(strong($crow[3]));
+
+                if ($rs) {
+                    $out = '<ul>';
+
+                    foreach ($rs as $row) {
+                        $hlink = '';
+                        $vars = '';
+
+                        foreach ($display as $col) {
+                            $urlvars = do_list($crow[6]);
+                            $urlreps = do_list($crow[7]);
+                            $urlout = array();
+
+                            foreach ($urlvars as $idx => $urlvar) {
+                                $from = '{'.$urlvar.'}';
+                                $urlrep = $urlreps[$idx];
+                                $urlout[$urlvar] = strtr($urlrep, array($from => $row[$urlvar]));
+                            }
+
+                            $vars = join_qs(array("event" => $crow[4], "step" => $crow[5]) + $urlout);
+                            $hlink .= ($hlink ? ' | ' : '') . $row[$col];
+                        }
+
+                        $out .= ($hlink) ? '<li>' . (($vars) ? '<a href="index.php'.$vars.'">'.$hlink.'</a> ' : $hlink) . '</li>': '';
+                    }
+
+                    $out .= '</ul>';
+                    $colBody[] = td($out);
+                } else {
+                    $colBody[] = td(gTxt('no_results_found'));
+                }
+            }
+
+            echo tr(join(" ", $colHead));
+            echo tr(join(" ", $colBody));
+        } else {
+            // No search criteria, so show orphans.
+            echo tr(tdcs(tag(gTxt('smd_wu_orphan_results'), 'h2'), 5));
+
+            // Reprogram the places/placeTable.
+            $artkey = array_search('articles', $places);
+
+            if ($artkey !== false) {
+                unset($places[$artkey]);
+            }
+
+            // pages/forms/sections to ignore because they are static and cannot be deleted.
+            // @todo Use Skin package getEssentials() for this.
+            $essentials = array(
+                'sections' => array('default'),
+                'pages' => array('error_default'),
+                'forms' => array('comments','comments_display','comment_form','default','Links','files'), // copied from txp_forms
+            );
+
+            $places[] = 'plugins';
+
+            // Overwrite some of the extraction criteria for the orphan search.
+            $placeTable['plugins'] = array('txp_plugin', 'name', 'name', gTxt('plugins'), 'plugin', 'plugin', 'name:crit, search_method', '{name}, name');
+            $placeTable['forms'][8] = $skin ? "tf.skin='".doSlash($skin)."'" : '';
+            $placeTable['pages'][8] = $skin ? "tp.skin='".doSlash($skin)."'" : '';
+            $placeTable['stylesheets'][1] = 'name';
+            $placeTable['stylesheets'][8] = $skin ? "ts.skin='".doSlash($skin)."'" : '';
+            $placeTable['forms'][0] = "SELECT tf.name, tf.skin FROM " .safe_pfx('txp_form'). " AS tf WHERE tf.name NOT IN (" .doQuote(implode("','",$essentials['forms'])). ") ".($placeTable['forms'][8] ? ' AND '.$placeTable['forms'][8] : '')." ORDER BY tf.name"; // Would be nice to exclude forms that reference forms here instead of iterating through them later.
+            $placeTable['pages'][0] = "SELECT tp.name, tp.skin FROM " .safe_pfx('txp_section'). " AS ts RIGHT JOIN " .safe_pfx('txp_page'). " AS tp ON ts.page = tp.name WHERE ts.page IS NULL AND tp.name NOT IN (" .doQuote(implode("','",$essentials['pages'])). ") ".($placeTable['pages'][8] ? ' AND '.$placeTable['pages'][8] : '')." ORDER BY tp.name";
+            $placeTable['plugins'][0] = "SELECT tg.name, tg.code FROM " .safe_pfx('txp_plugin'). " AS tg WHERE type < " .($plugtype+1). " AND tg.name != 'smd_where_used' ORDER BY tg.name";
+            $placeTable['sections'][0] = "SELECT ts.name FROM " .safe_pfx('txp_section'). " AS ts LEFT JOIN " .safe_pfx('textpattern'). " AS txp ON ts.name = txp.section WHERE ID IS NULL AND ts.name NOT IN (" .doQuote(implode("','",$essentials['sections'])). ") ORDER BY ts.name";
+            $placeTable['stylesheets'][0] = "SELECT tc.name, tc.skin FROM " .safe_pfx('txp_section'). " AS ts RIGHT JOIN " .safe_pfx('txp_css'). " AS tc ON ts.css = tc.name WHERE ts.page IS NULL ".($placeTable['stylesheets'][8] ? ' AND '.$placeTable['stylesheets'][8] : '')." ORDER BY tc.name";
+
+            // For "awkward" queries that can't be done in one shot, there are three things required per $place:
+            //  1: txp table name
+            //  2: list of columns to compare
+            //  3: method of comparison per column (0 = "direct match", 1 = "like")
+            $cTable = array(
+                'plugins' => array(
+                    'txp_form' => array('form' => 1),
+                    'txp_page' => array('user_html' => 1),
+                    'textpattern' => array('Body' => 1, 'Excerpt' => 1),
+                ),
+                'forms' => array(
+                    'txp_form' => array('form' => 1),
+                    'txp_page' => array('user_html' => 1),
+                    'textpattern' => array('Body' => 1, 'Excerpt' => 1, 'override_form' => 0),
+                ),
+            );
+
+            // Work on a column at a time.
+            foreach ($places as $place) {
+                $crow = $placeTable[$place];
+                $colRefs = do_list($crow[2]);
+                $colHead[] = td(strong($crow[3] . (($place == 'plugins') ? (($plugtype==0) ? gTxt('smd_wu_public_plugins') : gTxt('smd_wu_admin_plugins') ) : '') ));
+                $rs = getRows($crow[0]);
+
+                if ($rs) {
+                    $out = '<ul>';
+
+                    foreach ($rs as $row) {
+                        // Count the no of records matching this name in each table.
+                        // Any time this goes above zero, the item is used and it can be ignored.
+                        $fnaliases = array();
+
+                        if (array_key_exists($place, $cTable)) {
+                            // Plugin functions are not necessarily the name of the plugin itself.
+                            // Find all function definitions and build a list of aliases.
+                            if ($place == 'plugins') {
+                                $re = '/function\s+([A-Za-z0-9_]+)\s*\(/';
+                                $num = preg_match_all($re, $row['code'], $fnaliases);
+                            }
+
+                            $recs = 0;
+
+                            foreach ($cTable[$place] as $tbl => $colInfo) {
+                                if ($recs == 0) {
+                                    $where = array();
+
+                                    foreach ($colInfo as $colName => $qryType) {
+                                        $where[] = $colName . (($qryType==0) ? " = '" .$row[$colRefs[0]]. "'" : " LIKE '%" .$row[$colRefs[0]]. "%'");
+                                        if (count($fnaliases) > 1) {
+                                            foreach ($fnaliases[1] as $fnalias) {
+                                                $where[] = $colName . (($qryType==0) ? " = '" .$fnalias. "'" : " LIKE '%" .$fnalias. "%'");
+                                            }
+                                        }
+                                    }
+
+                                    $where = join(" OR ", $where);
+                                    $recs += safe_count($tbl, $where);
+                                }
+                            }
+
+                            // If the item has not been found, flag it.
+                            if ($recs == 0) {
+                                $colNames = $colRefs;
+                            } else {
+                                $colNames = array();
+                            }
+                        } else {
+                            $colNames = $colRefs;
+                        }
+
+                        // Make up the string to display, and hyperlink it if directed.
+                        $hlink = '';
+                        $vars = '';
+
+                        foreach ($colNames as $col) {
+                            $urlvars = do_list($crow[6]);
+                            $urlreps = do_list($crow[7]);
+                            $urlout = array();
+
+                            foreach ($urlvars as $idx => $urlvar) {
+                                $alias = do_list($urlvar, ':');
+                                $from = '{'.$alias[0].'}';
+                                $to = isset($alias[1]) ? $alias[1] : $urlvar;
+                                $urlrep = $urlreps[$idx];
+                                $urlout[$to] = isset($row[$alias[0]]) ? strtr($urlrep, array($from => $row[$alias[0]])) : $urlrep;
+                            }
+
+                            $vars = join_qs(array("event" => $crow[4], "step" => $crow[5]) + $urlout);
+                            $hlink .= ($hlink ? ' | ' : '') . $row[$col];
+                        }
+
+                        $out .= ($hlink) ? '<li>' . (($vars) ? '<a href="index.php'.$vars.'">'.$hlink.'</a> ' : $hlink) . '</li>': '';
+                    }
+
+                    $out .= '</ul>';
+                    $colBody[] = td($out);
+                } else {
+                    $colBody[] = td(gTxt('smd_wu_no_orphans_found'));
+                }
+            }
+            echo tr(join(" ", $colHead));
+            echo tr(join(" ", $colBody));
+        }
+        echo endTable();
+    }
+
 }
 # --- END PLUGIN CODE ---
 if (0) {
@@ -409,7 +638,7 @@ So use this plugin to search your sections, pages, forms or articles for referen
 
 h2. Installation / Uninstallation
 
-Download the plugin from either "textpattern.org":http://textpattern.org/plugins/984/smd_where_used, or the "software page":http://stefdawson.com/sw, paste the code into the Textpattern _Admin->Plugins_ panel, install and enable the plugin. Visit the "forum thread":http://forum.textpattern.com/viewtopic.php?id=27493 for more info and to report the success (or otherwise) of this plugin.
+Download the plugin from either "textpattern.org":https://plugins.textpattern.com/plugins/smd_where_used, or the "software page":https://stefdawson.com/sw, paste the code into the Textpattern _Admin->Plugins_ panel, install and enable the plugin. Visit the "forum thread":https://forum.textpattern.com/viewtopic.php?id=27493 for more info and to report the success (or otherwise) of this plugin.
 
 Uninstall by simply deleting the plugin from the _Admin->Plugins_ panel.
 
