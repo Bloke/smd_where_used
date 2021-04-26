@@ -17,7 +17,7 @@ $plugin['name'] = 'smd_where_used';
 // 1 = Plugin help is in raw HTML.  Not recommended.
 # $plugin['allow_html_help'] = 1;
 
-$plugin['version'] = '0.40';
+$plugin['version'] = '0.4.0';
 $plugin['author'] = 'Stef Dawson';
 $plugin['author_uri'] = 'https://stefdawson.com/';
 $plugin['description'] = 'Find which forms/pages/articles/plugins/text have been used where in your design';
