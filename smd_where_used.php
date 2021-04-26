@@ -160,7 +160,6 @@ class smd_wu
      */
     public function ui($message = '', $what= '', $where = array())
     {
-        $thisSkin = Txp::get('Textpattern\Skin\Page');
         $instance = Txp::get('Textpattern\Skin\Skin');
 
         $sel = empty($where['places']) ? json_decode(get_pref('smd_wu_look_in')) : $where['places'];
@@ -176,19 +175,13 @@ class smd_wu
         pagetop(gTxt($this->event), $message);
 
         // Todo: introduce 3, 4, 5 plugin type support.
-        $btnSearch = fInput('submit', 'smd_wu_search', gTxt('search'), 'smallerbox')
+        $btnSearch = fInput('submit', 'smd_wu_search', gTxt('search'), 'publish')
             .eInput($this->event)
             .sInput('search')
             .tInput()
             .hInput('plugtype', (($plugtype == 1) ? 0 : 1));
 
-        // @todo: Fix styles.
-        $btnStyle = ' style="border:0;height:25px"';
-
         $skins = $instance->setName($skin)->getInstalled();
-
-        // $essential_forms = $thisSkin->getEssential('name');
-
         $out = array();
 
         // TODO: use latest grid for layout.
@@ -204,7 +197,7 @@ class smd_wu
             . tdcs(
                 fInput('text', 'search_for', stripslashes($what), '', '', '', 30, '', 'smd_search_for')
                 , 5)
-            . tda($btnSearch, $btnStyle));
+            . tda($btnSearch));
 
         $meths = array(0 => gTxt('smd_wu_inclusion'), 1 => gTxt('smd_wu_exclusion'));
         $out[] = tr(
@@ -247,7 +240,7 @@ class smd_wu
         $out[] = '</ul>'.fInput('submit', 'smd_wu_prefsave', gTxt('save'), 'smallerbox', '', '', '', '', 'smd_wu_prefsave');
         $out[] = '</form></div>';
         $out[] = <<<EOJS
-<script type="text/javascript">
+<script>
 jQuery(function() {
     jQuery("#smd_search_for").focus();
     jQuery("#smd_wu_prefs").hide();
@@ -271,7 +264,10 @@ jQuery(function() {
     });
 });
 </script>
-<style type="text/css">
+<style>
+#smd_wu_prefwrap {
+    margin:0 1em 1em;
+}
 .smd_grid {
     display: flex;
     flex-wrap: wrap;
@@ -421,7 +417,6 @@ EOJS;
 
         $rs = array();
 
-        echo n.'<hr width="50%" />';
         echo startTable('list');
 
         $colHead = array();
@@ -495,11 +490,12 @@ EOJS;
             }
 
             // pages/forms/sections to ignore because they are static and cannot be deleted.
-            // @todo Use Skin package getEssentials() for this.
+            $pageInfo = Txp::get('Textpattern\Skin\Page');
+            $formInfo = Txp::get('Textpattern\Skin\Form');
             $essentials = array(
                 'sections' => array('default'),
-                'pages' => array('error_default'),
-                'forms' => array('comments','comments_display','comment_form','default','Links','files'), // copied from txp_forms
+                'pages'    => $pageInfo->getEssential('name'),
+                'forms'    => $formInfo->getEssential('name')
             );
 
             $places[] = 'plugins';
