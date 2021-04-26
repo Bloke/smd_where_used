@@ -193,6 +193,11 @@ class smd_wu
 
         // TODO: use latest grid for layout.
         $out[] = '<form method="post" name="smd_wu_form">';
+        $out[] = inputLabel(
+                'skin',
+                selectInput('skin', $skins, $skin, true, 0, 'skin'),
+                'skin'
+            );
         $out[] = startTable('list');
         $out[] = tr(
             fLabelCell(gTxt('smd_wu_search_lbl'))
@@ -201,33 +206,26 @@ class smd_wu
                 , 5)
             . tda($btnSearch, $btnStyle));
 
-        // @todo link labels to checkbox/radio.
+        $meths = array(0 => gTxt('smd_wu_inclusion'), 1 => gTxt('smd_wu_exclusion'));
         $out[] = tr(
             fLabelCell(gTxt('smd_wu_filter'))
-                . tdcs(
-                    radio('meth', 0, (($incl == 0) ? 1 : 0))
-                    .n. gTxt('smd_wu_inclusion')
-                    .n.
-                    radio('meth', 1, (($incl == 1) ? 1 : 0))
-                    .n. gTxt('smd_wu_exclusion')
-                    . " | "
-                    . checkbox('whole', 1, (($whole == 1) ? 1 : 0))
-                    .n.gTxt('smd_wu_whole_word')
-                    . " | "
-                    . checkbox('case', 1, (($case == 1) ? 1 : 0))
-                    .n.gTxt('smd_wu_match_case')
+                .tdcs(
+                    radioSet($meths, 'meth', (($incl == 1) ? 1 : 0))
+                    ." | "
+                    .checkbox('whole', 1, (($whole == 1) ? 1 : 0), '', 'smd_wu_whole')
+                    .n.tag(gTxt('smd_wu_whole_word'), 'label', array('for' => 'smd_wu_whole'))
+                    ." | "
+                    .checkbox('case', 1, (($case == 1) ? 1 : 0), '', 'smd_wu_case')
+                    .n.tag(gTxt('smd_wu_match_case'), 'label', array('for' => 'smd_wu_case'))
                     , 5));
-
-        $out[] = inputLabel(
-                'skin',
-                selectInput('skin', $skins, $skin, true, 0, 'skin'),
-                'skin'
-            );
 
         $lookAt = '';
 
         foreach ($this->places as $here) {
-            $lookAt .= fLabelCell(checkbox('places[]', $here, in_array($here, $sel)) . n . ucfirst(gTxt($here)));
+            $lookAt .= fLabelCell(
+                checkbox('places[]', $here, in_array($here, $sel), '', 'smd_wu_look_'.$here)
+                .n.tag(ucfirst(gTxt($here)), 'label', array('for' => 'smd_wu_look_'.$here))
+            );
         }
 
         $out[] = tr(fLabelCell(gTxt('smd_wu_search_where_lbl')) . $lookAt);
@@ -243,7 +241,7 @@ class smd_wu
         $out[] = '<form method="post" id="smd_wu_prefs" style="display:none;"><ul class="smd_grid">';
 
         foreach ($cols as $col) {
-            $out[] = tag(checkbox('smd_wu_article_fields[]', $col, (in_array($col, $flds) ? 1 : 0)).sp.$col, 'li');
+            $out[] = tag(checkbox('smd_wu_article_fields[]', $col, (in_array($col, $flds) ? 1 : 0), '', 'smd_wu_artfield_'.$col).n.tag($col, 'label', array('for' => 'smd_wu_artfield_'.$col)), 'li');
         }
 
         $out[] = '</ul>'.fInput('submit', 'smd_wu_prefsave', gTxt('save'), 'smallerbox', '', '', '', '', 'smd_wu_prefsave');
