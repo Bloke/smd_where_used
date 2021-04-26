@@ -1,5 +1,12 @@
 h1. Changelog
 
+h2. 0.4.0 - 2021-04-27
+
+* Requires Textpattern 4.7.0+
+* Added theme search capability.
+* Tidied up interface a little.
+* Linked labels to input controls for improved clickability.
+
 h2. 0.3.0 - 2010-05-19
 
 * Requires Textpattern 4.3.0

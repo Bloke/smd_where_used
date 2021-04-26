@@ -1,0 +1,16 @@
+{
+  "name": "bloke/smd_where_used",
+  "description": "Find which forms/pages/articles/plugins/text have been used where in your Textpattern site design",
+  "keywords": ["textpattern", "plugin", "find", "search", "orphan", "locate"],
+  "homepage": "https://github.com/bloke/smd_where_used",
+  "license": "GPL-2.0",
+  "type": "textpattern-plugin",
+  "support": {
+    "issues": "https://github.com/bloke/smd_where_used/issues",
+    "source": "https://github.com/bloke/smd_where_used"
+  },
+  "require": {
+    "textpattern/lock": ">=4.7.0",
+    "textpattern/installer": "*"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "name": "smd_where_used",
+  "description": "Find which forms/pages/articles/plugins/text have been used where in your site design",
+  "version": "0.4.0",
+  "type": 4,
+  "author": "Stef Dawson",
+  "author_uri": "https://stefdawson.com/",
+  "order": 5,
+  "flags": 0,
+  "help": {"file" : ["./README.textile"]}
+}
