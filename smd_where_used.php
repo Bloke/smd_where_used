@@ -245,7 +245,7 @@ jQuery(function() {
     jQuery("#smd_search_for").focus();
     jQuery("#smd_wu_prefs").hide();
     jQuery("#smd_wu_preftog").click(function() {
-        jQuery("#smd_wu_prefs").toggle('fast');
+        jQuery("#smd_wu_prefs").toggle();
         return false;
     });
     jQuery("#smd_wu_prefsave").click(function() {
@@ -259,7 +259,7 @@ jQuery(function() {
                 step: 'prefsave',
                 smd_wu_article_fields: out.join(',')
         });
-        jQuery("#smd_wu_prefs").toggle('fast');
+        jQuery("#smd_wu_prefs").toggle();
         return false;
     });
 });
